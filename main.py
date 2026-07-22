@@ -16,7 +16,7 @@ from sklearn.ensemble import GradientBoostingClassifier
 
 def run_prediction():
     try:
-        # โหลดไฟล์ Excel จากโฟลเดอร์เดียวกันใน Hugging Face Repo
+        # โหลดไฟล์ Excel จากโฟลเดอร์เดียวกัน
         file_path = "B-INNOTECHRMF_Daily_NAV_5Years.xlsx"
         df = pd.read_excel(file_path, sheet_name="Daily NAV Data", skiprows=2)
         df.columns = ['Date', 'NAV', 'Daily Return']
@@ -65,21 +65,43 @@ def run_prediction():
         status_1d = "📈 ขาขึ้น (UP)" if pred_1d == 1 else "📉 ขาลง (DOWN)"
         status_7d = "📈 ขาขึ้น (UP)" if pred_7d == 1 else "📉 ขาลง (DOWN)"
 
-        message = f"""
-🤖 รายงานอัตโนมัติ: B-INNOTECHRMF
+        message = f"""🤖 รายงานอัตโนมัติ: B-INNOTECHRMF
 📅 ข้อมูลวันที่: {latest_date}
 💰 NAV ล่าสุด: {latest_nav:,.4f} THB
 
 🔮 ผลการทำนาย:
 - แนวโน้มวันรุ่งขึ้น (1 วัน): {status_1d}
-- แนวโน้มอีก 7 วันข้างหน้า: {status_7d}
-"""
+- แนวโน้มอีก 7 วันข้างหน้า: {status_7d}"""
 
-        # ดึง Token จาก Environment Variable เพื่อความปลอดภัย
-        line_token = os.environ.get('LINE_NOTIFY_TOKEN')
-        headers = {'Authorization': 'Bearer ' + line_token}
-        requests.post('https://notify-api.line.me/api/notify', headers=headers, data={'message': message})
-        print("Successfully sent message to LINE!")
+        # ส่งข้อความผ่าน LINE Messaging API (Push Message)
+        line_token = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
+        line_user_id = os.environ.get('LINE_USER_ID')
+
+        url = "https://api.line.me/v2/bot/message/push"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {line_token}"
+        }
+        payload = {
+            "to": line_user_id,
+            "messages": [
+                {
+                    "type": "text",
+                    "text": message.strip()
+                }
+            ]
+        }
+
+        response = requests.post(url, headers=headers, json=payload)
+
+        # พิมพ์ Log เพื่อตรวจสอบสถานะการส่ง
+        print("Response status:", response.status_code)
+        print("Response body:", response.text)
+
+        if response.status_code == 200:
+            print("Successfully sent message to LINE!")
+        else:
+            print("Failed to send message to LINE.")
 
     except Exception as e:
         print(f"Error: {str(e)}")
