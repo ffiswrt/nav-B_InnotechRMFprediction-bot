@@ -13,10 +13,12 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 def run_prediction():
     try:
-        # โหลดไฟล์ Excel จากโฟลเดอร์เดียวกัน
+        # โหลดไฟล์ Excel จากโฟลเดอร์เดียวกัน (สามารถปรับเปลี่ยนเป็นการดึงข้อมูลอัตโนมัติประจำวันได้ที่นี่)
         file_path = "B-INNOTECHRMF_Daily_NAV_5Years.xlsx"
         df = pd.read_excel(file_path, sheet_name="Daily NAV Data", skiprows=2)
         df.columns = ['Date', 'NAV', 'Daily Return']
@@ -44,18 +46,37 @@ def run_prediction():
         y1 = df_model['Target_1d'].values
         y7 = df_model['Target_7d'].values
 
-        # ML Model (Gradient Boosting)
+        # แบ่งข้อมูลสำหรับ Train และ Test เพื่อวัดค่า % Accuracy
+        X_train, X_test, y1_train, y1_test, y7_train, y7_test = train_test_split(
+            X, y1, y7, test_size=0.2, shuffle=False
+        )
+
+        # Scale ข้อมูล
         scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
 
+        # สำหรับทำนายข้อมูลล่าสุด (ใช้ข้อมูลทั้งหมด Scale ร่วมกัน)
+        X_all_scaled = scaler.fit_transform(X)
+
+        # ML Model (1 วัน)
         model_1d = GradientBoostingClassifier(n_estimators=150, learning_rate=0.01, max_depth=3, random_state=42)
-        model_1d.fit(X_scaled, y1)
+        model_1d.fit(X_train_scaled, y1_train)
+        preds_1d_test = model_1d.predict(X_test_scaled)
+        acc_1d = accuracy_score(y1_test, preds_1d_test) * 100
 
+        # ML Model (7 วัน)
         model_7d = GradientBoostingClassifier(n_estimators=150, learning_rate=0.01, max_depth=3, random_state=42)
-        model_7d.fit(X_scaled, y7)
+        model_7d.fit(X_train_scaled, y7_train)
+        preds_7d_test = model_7d.predict(X_test_scaled)
+        acc_7d = accuracy_score(y7_test, preds_7d_test) * 100
+
+        # เทรนโมเดลด้วยข้อมูลทั้งหมดเพื่อใช้ทำนายผลลัพธ์ปัจจุบัน
+        model_1d.fit(X_all_scaled, y1)
+        model_7d.fit(X_all_scaled, y7)
 
         # ทำนายข้อมูลล่าสุด
-        latest_features = X_scaled[-1:]
+        latest_features = X_all_scaled[-1:]
         pred_1d = model_1d.predict(latest_features)[0]
         pred_7d = model_7d.predict(latest_features)[0]
         latest_nav = df_model['NAV'].iloc[-1]
@@ -71,7 +92,11 @@ def run_prediction():
 
 🔮 ผลการทำนาย:
 - แนวโน้มวันรุ่งขึ้น (1 วัน): {status_1d}
-- แนวโน้มอีก 7 วันข้างหน้า: {status_7d}"""
+- แนวโน้มอีก 7 วันข้างหน้า: {status_7d}
+
+📊 ความแม่นยำของโมเดล (Accuracy):
+- โมเดล 1 วัน: {acc_1d:.2f}%
+- โมเดล 7 วัน: {acc_7d:.2f}%"""
 
         # ส่งข้อความผ่าน LINE Messaging API (Push Message)
         line_token = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
@@ -94,7 +119,6 @@ def run_prediction():
 
         response = requests.post(url, headers=headers, json=payload)
 
-        # พิมพ์ Log เพื่อตรวจสอบสถานะการส่ง
         print("Response status:", response.status_code)
         print("Response body:", response.text)
 
