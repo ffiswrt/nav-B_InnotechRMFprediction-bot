@@ -1,7 +1,0 @@
-pandas
-numpy
-scikit-learn
-openpyxl
-requests
-beautifulsoup4
-apscheduler
